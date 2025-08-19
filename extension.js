@@ -693,7 +693,7 @@ if(!_status.extensionmade) _status.extensionmade=[];
                                 if (player.storage.xianfa3[1]<36) tmp_list.push("观看数量+6");
                                 if (player.countMark("xiandi仙法") < 1) tmp_list.push("可令受伤角色执行额外回合");
                                 let tmp_result = await player.chooseControl(tmp_list).set("prompt", "仙法：选择一项升级").forResult();
-                                switch (tmp_result.control){
+                                switch (tmp_result && tmp_result.control){
                                         case "距离+2":
                                             player.storage.xianfa3[0]+=2;
                                             break;
@@ -1520,7 +1520,7 @@ if(!_status.extensionmade) _status.extensionmade=[];
             "渐专": "渐专",
             "渐专_info": "其他角色使用基本牌或普通锦囊牌指定你为目标后，你可以弃置一张牌令其弃置X张牌（X为其本回合使用基本盘和普通锦囊牌指定你的次数）",
             "xiandi仙帝": "仙帝",
-            "xiandi仙帝_info": "持恒技。游戏开始时，你获得〖仙裁〗〖仙体〗〖仙法〗〖仙露〗〖仙姿〗〖仙罚〗；准备阶段，你随机获得1-5点仙气，然后使用所有仙气来升级这些技能或者摸牌。",
+            "xiandi仙帝_info": "持恒技。游戏开始时，你获得〖仙裁〗〖仙体〗〖仙法〗〖仙露〗〖仙姿〗〖仙罚〗；准备阶段，你随机获得1-5点仙气，然后消耗所有仙气来升级这些技能或者摸牌。",
             "xiandi仙体": "仙体",
             "xiandi仙体_info": "持恒技。你无法被翻面；你无法被跳过任何阶段；你的手牌上限始终等于体力上限；你降受到的大于1点的伤害降至1点；摸牌阶段，你可以额外摸体力上限张牌；延时锦囊（升级：普通杀/属性杀/普通锦囊）对你无效，当你成为其他角色使用的这些牌的目标后，你获得1点仙气；出牌阶段限1次， 你可以弃置任意张牌并失去等量体力，令一名角色增加等量体力上限或回复等量体力。",
             "xiandi仙罚": "仙罚",
