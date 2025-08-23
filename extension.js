@@ -256,13 +256,14 @@ if(!_status.extensionmade) _status.extensionmade=[];
 }},package:{
     character: {
         character: {
-            "武四郎": ["male","qun","5/7",["dcjincui","dcqingshi","dczhizhe","dcxiongmu","dczhangcai","dcruxian","dcwuyou","dcyixian","dcchaozhen","dclianjie","dcjiangxian"],["des:武诸葛亮+武陆逊+武关羽+武皇甫嵩"]],
+            "武四郎": ["male","qun","5/7",["dcjincui","dcqingshi","dczhizhe","dcxiongmu","dczhangcai","dcruxian","dcwuyou","dcyixian","dcchaozhen","dclianjie","dcjiangxian"],["des:武诸葛亮+武陆逊+武关羽+武皇甫嵩","ext:仙界大乱斗/武四郎.jpg","die:ext:仙界大乱斗/audio/die/武四郎.mp3"]],
             "四血模板": ["male","wu",4,["择摸"],["des:4血摸X模板将","ext:仙界大乱斗/四血模板.jpg","die:ext:仙界大乱斗/audio/die/四血模板.mp3"]],
             "界曹宪": ["female","wei",3,["dclingxi","dczhifou","先知"],["des:先发育一轮的曹宪你怕不怕","ext:仙界大乱斗/界曹宪.jpg","die:ext:仙界大乱斗/audio/die/界曹宪.mp3"]],
             "界曹纯": ["male","wei",4,["装甲"],["des:完全体新杀曹纯","ext:仙界大乱斗/界曹纯.jpg","die:ext:仙界大乱斗/audio/die/界曹纯.mp3"]],
             "合黄盖": ["male","wu",4,["kurou","zhaxiang"],["des:黄盖界黄盖","ext:仙界大乱斗/合黄盖.jpg","die:ext:仙界大乱斗/audio/die/合黄盖.mp3"]],
             "仙帅·吕玲绮": ["female","shen",5,["仙帅","zhuangpo","zhenlue","玲舞","绮靡","jlsgsy_xiuluo","渐专"],["des:仙界元帅吕玲绮","ext:仙界大乱斗/仙帅·吕玲绮.jpg","die:ext:仙界大乱斗/audio/die/仙帅·吕玲绮.mp3"]],
             "仙帝·曹金玉": ["female","shen","9/9",["xiandi仙帝"],["des:仙界之王金玉大帝","ext:仙界大乱斗/仙帝·曹金玉.jpg","die:ext:仙界大乱斗/audio/die/仙帝·曹金玉.mp3"]],
+            "酒仙·庞凤衣": ["female","shen","3/3",["骰酒","酒绝","酒仙"],["des:来到仙界后，凡人之酒被替换为玉液琼浆，酗酒的庞凤衣因此练成酒仙。"]],
         },
         translate: {
             "武四郎": "武四郎",
@@ -273,6 +274,7 @@ if(!_status.extensionmade) _status.extensionmade=[];
             "仙帅·吕玲绮": "仙帅·吕玲绮",
             "仙帝·曹金玉": "仙帝·曹金玉",
             "仙界大乱斗": "仙界大乱斗",
+            "酒仙·庞凤衣": "酒仙·庞凤衣",
         },
     },
     card: {
@@ -639,7 +641,7 @@ if(!_status.extensionmade) _status.extensionmade=[];
                         let list = [];
                         if (player.hasSkill("xiandi仙裁") && player.storage.xiandi_xiancai) list.push("升级〖仙裁〗");
                         if (player.countMark("xiandi仙体") < 3 && player.hasSkill("xiandi仙体")) list.push("升级〖仙体〗");
-                        if (player.hasSkill("xiandi仙法") && player.storage.xianfa3 && !(player.countMark("xiandi仙法") >= 1 && player.storage.xianfa3[0]>=10 && player.storage.xianfa3[0]>=36)) list.push("升级〖仙法〗");
+                        if (player.hasSkill("xiandi仙法") && player.storage.xianfa3 && !(player.countMark("xiandi仙法") >= 1 && player.storage.xianfa3[0]>=10 && player.storage.xianfa3[1]>=36)) list.push("升级〖仙法〗");
                         if (player.hasSkill("xiandi仙露") && player.storage.xianlu_limit) list.push("升级〖仙露〗");
                         if (player.hasSkill("xiandi仙姿") && player.storage.xianzi_sha && player.storage.xianzi_sha<3) list.push("升级〖仙姿〗");
                         if (player.hasSkill("xiandi仙罚")) list.push("升级〖仙罚〗");
@@ -1507,6 +1509,221 @@ if(!_status.extensionmade) _status.extensionmade=[];
                 },
                 "_priority": 0,
             },
+            "酒绝": {
+                mod: {
+                    cardUsable: function (card, player, num) {
+                        if (card.name == "jiu") return Infinity;
+                    },
+                },
+                enable: "chooseToUse",
+                filterCard: function (card) {
+                    return true;
+                },
+                viewAs: {
+                    name: "jiu",
+                },
+                position: "hs",
+                viewAsFilter: function (player) {
+                    return player.hasCard(card => true, "hs");
+                },
+                prompt: "将一张手牌当【酒】使用",
+                "_priority": 0,
+                group:["酒绝_fengyin","酒绝_recount"],
+                subSkill: {
+                    fengyin:{
+                        init(player, skill) {
+                            player.storage["酒绝"] = {spade:0, club:0, heart:0, diamond:0};
+                        },
+                        trigger: {
+                            player: ["useCard", "respond"],
+                        },
+                        forced: true,
+                        popup: false,
+                        filter(event, player) {
+                            if (!get.suit(event.card) || event.card.name != "jiu") return false;
+                            if(!lib.suit.includes(get.suit(event.card))) return false;
+                            if (player.storage["酒绝"][get.suit(event.card)] < 2) player.storage["酒绝"][get.suit(event.card)]++;
+                            return player.storage["酒绝"][get.suit(event.card)] == 2;
+                        },
+                        content() {
+                            var suit = get.suit(trigger.card);
+                            game.log(player, "的〖酒绝〗触发，令其他角色本回合内不能使用或打出", "#y" + get.translation(suit) + "的牌");
+                            var targets = game.filterPlayer(current => current != player);
+                            for (var target of targets) {
+                                target.addTempSkill("酒绝_ban");
+                                target.markAuto("酒绝_ban", [suit]);
+                            }
+                        },
+                        onremove(player, skill) {
+                            delete player.storage["酒绝"];
+                        },
+                    },
+                    ban: {
+                        onremove: true,
+                        charlotte: true,
+                        mod: {
+                            cardEnabled(card, player) {
+                                if (player.getStorage("酒绝_ban").includes(get.suit(card))) return false;
+                            },
+                            cardRespondable(card, player) {
+                                if (player.getStorage("酒绝_ban").includes(get.suit(card))) return false;
+                            },
+                            cardSavable(card, player) {
+                                if (player.getStorage("酒绝_ban").includes(get.suit(card))) return false;
+                            },
+                        },
+                        mark: true,
+                        marktext: "绝",
+                        intro: {
+                            content: "本回合内不能使用或打出$的牌",
+                        },
+                    },
+                    recount:{
+                        trigger: {global: "phaseEnd"},
+                        forced: true,
+                        popup: false,
+                        content() {
+                            for (k of Object.keys(player.storage["酒绝"])) player.storage["酒绝"][k] = 0;
+                            game.log(player, "的〖酒绝〗重置计数");
+                        },
+                    },
+                },
+            },
+            "骰酒": {
+                init(player, skill) {
+                    if (!player.storage["骰酒"]) player.storage["骰酒"] = { suit: null, number: 0, color: null };
+                },
+                audioname: ["boss_qinglong"],
+                trigger: { player: ["useCardAfter"] },
+                forced: true,
+                filter(event, player) {
+                    if (event.name !== "useCard") return false;
+                    return (event.card && (event.card.name === "jiu" || get.name(event.card, player, "raw") === "jiu"))
+                    && !!player.storage["骰酒"].color;
+                },
+                async content(event, trigger, player) {
+                    const j = await player.judge();
+                    const jcard = (j && j.result && j.result.card) || (j && j.card) || j;
+                    if (!jcard) return;
+                    const isRealJiu = trigger.card.isCard;
+                    if (isRealJiu) game.log(player, "本次〖骰酒〗进行宽松判定");
+                    const lenient = isRealJiu || player.hasSkill("酒仙_lenient"); //“宽松判定”
+
+                    const sel = player.storage["骰酒"];
+                    const jc_color = get.color(jcard);
+                    const jc_suit  = get.suit(jcard);
+                    const jc_num   = get.number(jcard)|0;
+
+                    const matchColor   = lenient ? true : (jc_color === sel.color);
+                    const matchSuitEq  = lenient ? (jc_color === sel.color) : (jc_suit === sel.suit);
+                    const matchNumber  = lenient ? ((jc_suit === sel.suit) || (jc_num === sel.number)) : (jc_num === sel.number);
+
+                    if (matchColor) await player.draw();
+                    if (matchSuitEq) {
+                        await player.gainMaxHp();
+                        await player.recover(1);
+                    }
+                    if (matchNumber) {
+                        let j2 = await player.judge();
+                        let jcard2 = (j2 && j2.result && j2.result.card) || (j2 && j2.card) || j2;
+                        let n = (jcard2 && get.number(jcard2)) || 0;
+                        if (n > 0) await player.draw(n);
+                    }
+                },
+                onremove: (player, skill) => {
+                    delete player.storage["骰酒"];
+                },
+                group: ["骰酒_select"],
+                subSkill: {
+                    select: {
+                    trigger: { player: "enterGame", global: "phaseBefore" },
+                    filter(event) { return (event.name != "phase" || game.phaseNumber == 0); },
+                    forced: true,
+                    async content(event, trigger, player) {
+                        const suits = lib.suit;
+                        const res1 = suits.length > 1
+                        ? await player.chooseControl(suits)
+                            .set("ai", () => get.event().controls.randomGet())
+                            .set("prompt", "骰酒：请选择一个花色")
+                            .forResult()
+                        : { control: suits[0], index: 0 };
+                        const suit = res1.control;
+
+                        const num_list = Array.from({ length: 13 }, (_, i) => get.strNumber(i + 1));
+                        const res2 = await player
+                        .chooseControl(num_list)
+                        .set("ai", () => get.rand(0, 12))
+                        .set("prompt", "请选择一个点数")
+                        .forResult();
+
+                        const num = (typeof res2.index === "number") ? (res2.index + 1) : 13;
+
+                        if (suit) {
+                        player.storage["骰酒"].suit = suit;
+                        player.storage["骰酒"].number = num;
+                        player.storage["骰酒"].color = (suit === "spade" || suit === "club") ? "black" : "red";
+
+                        player.markAuto("骰酒_select", [suit, num]);
+                        player.addTip("骰酒","骰酒：已记录花色 " + get.translation(suit + "2") + " 与点数 " + num);
+                        game.log(player, "记录了", "#y〖骰酒〗" + "的花色为", get.translation(suit + "2"), ",点数为", num);
+                    }
+                    },
+                    sub: true,
+                    sourceSkill: "骰酒",
+                    intro: {
+                        content(storage, player) {
+                            return "已记录" + get.translation(storage[0] + "2") + storage[1];
+                        },
+                    },
+                    "_priority": 0,
+                    },
+                },
+                "_priority": 0,
+            },
+            "酒仙": {
+                limited: true,
+                skillAnimation: true,
+                animationColor: "orange",
+                enable: "phaseUse",
+                usable: 1,
+                filter(event, player) {
+                    return true;
+                },
+                async content(event, trigger, player) {
+                    player.addTempSkill("酒仙_lenient", { player: "phaseEnd" });
+                    player.awakenSkill(event.name);
+                    player.addTip("酒仙","本回合你的“掷酒”改为宽松判定");
+                },
+                "_priority": 0,
+                subSkill: {
+                
+                    lenient: {
+                        charlotte: true,
+                        mark: true,
+                        marktext: "宽",
+                        intro: { content: "本回合〖掷酒〗改为执行宽松判定" },
+                        mod: 
+                        {
+                            cardEnabled(card, player) {
+                                if (player.storage.hfjieying2) return false;
+                            },
+                            cardSavable(card, player) {
+                                if (player.storage.hfjieying2) return false;
+                            },
+                        },
+                        trigger: { source: "damageSource" },
+                        forced: true,
+                        popup: false,
+                        sourceSkill: "酒仙",
+                        filter(event, player) {
+                            return !player.storage.hfjieying2 && player == _status.currentPhase;
+                        },
+                        content() {
+                            player.storage.hfjieying2 = true;
+                        },
+                    }
+                }
+            }
         },
         translate: {
             "择摸": "择摸",
@@ -1537,12 +1754,18 @@ if(!_status.extensionmade) _status.extensionmade=[];
             "玲舞_info": "当你造成或受到伤害后，你摸三倍于伤害量的牌。然后你下次造成伤害时弃置这些牌。",
             "绮靡": "绮靡",
             "绮靡_info": "当你对其他角色造成伤害时，若你有牌，你可以与其同时弃置至少一张牌。若你以此法弃置的牌的点数之和：不大于其，你摸2X张牌；不小于其，此伤害+X（X为其/你以此法弃置的牌数）。",
+            "酒绝": "酒绝",
+            "酒绝_info": "你可以将一张手牌当【酒】使用。你使用【酒】的次数不限。当你于一回合内使用一种花色的【酒】达到两张后，其他角色此回合内不能使用或打出该花色的牌。",
+            "骰酒": "骰酒",
+            "骰酒_info": "游戏开始时，你选择并记录一个花色和一个点数。当你使用【酒】后，你进行判定并比较判定结果与你记录的花色和点数：若它们颜色相同你摸一张牌；若它们花色相同你增加1点体力上限并恢复1点体力；若它们点数相同你进行判定并摸判定结果点数张牌。若你使用的是非转化的【酒】，则改为执行“宽松判定”：在上述比较时，颜色视为相同，原花色相同的条件改为颜色相同，原点数相同的条件改为花色或点数相同。",
+            "酒仙": "酒仙",
+            "酒仙_info": "限定技。出牌阶段，你可以令你的〖掷酒〗均执行“宽松判定”，然后本阶段内当年造成伤害后你结束此阶段。",
         },
     },
     intro: "一百年后的三国杀，仙界武将层出不穷，仙界大乱斗也随之而来。",
     author: "zhangfei233",
     diskURL: "",
     forumURL: "",
-    version: "V0.5 - beta",
-},files:{"character":["仙帅·吕玲绮.jpg","界曹纯.jpg","界曹宪.jpg","四血模板.jpg","武四郎.jpg","仙帝·曹金玉.jpg","合黄盖.jpg"],"card":[],"skill":[],"audio":[]},connect:false} 
+    version: "V0.6 - beta",
+},files:{"character":["武四郎.jpg","界曹宪.jpg","酒仙·庞凤衣.jpg","仙帅·吕玲绮.jpg","四血模板.jpg","界曹纯.jpg","合黄盖.jpg","仙帝·曹金玉.jpg"],"card":[],"skill":[],"audio":[]},connect:false} 
 };
