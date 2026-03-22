@@ -509,7 +509,7 @@ if(!_status.extensionmade) _status.extensionmade=[];
                     return player.countDiscardableCards(player,'he')>0&&player!=event.player;
                 },
                 check: function(event,player){
-                    return get.attitude(player,event.player)<0&&player.countCards('he',card=>lib.filter.cardDiscardable(card,player,'dcyiyong')&&get.value(card,player)<7)>0;
+                    return get.attitude(player,event.player)<0&&player.countCards('he',card=>lib.filter.cardDiscardable(card,player,'dcyiyong'))>0;
                 },
                 logTarget: "player",
                 content: function(){
@@ -523,30 +523,15 @@ if(!_status.extensionmade) _status.extensionmade=[];
                     player.chooseCardOL(event.list,'he',true,[1,Infinity],'绮靡：弃置任意张牌',(card,player,target)=>{
                         return lib.filter.cardDiscardable(card,player,'dcyiyong');
                     }).set('ai',card=>{
-                        var evt=_status.event.getParent(2);
-                        var source=evt.player,player=_status.event.player,target=evt.list[1];
-                        if(!target) return get.unuseful(card);
-                        if(player==source){
-                            var total=0,need=0;
-                            target.countCards('he',card=>{
-                                if(lib.filter.cardDiscardable(card,target,'dcyiyong')&&get.value(card)<5) need+=get.number(card);
-                            });
-                            for(var i of ui.selected.cards) total+=get.number(i);
-                            if(total>=need+5) return 0;
-                            var val=6;
-                            if(target.hp<=2&&!target.hasSkillTag('filterDamage',null,{
-                                player:player,
-                                card:evt.getTrigger().card,
-                            })) val+=2+get.number(card)/5;
-                            if(target.countCards('he',card=>get.value(card)<5)>=3) val-=3+get.number(card)/5;
-                            return val-get.value(card);
+                        var player = _status.event.player;
+                        var lingwuCards = player.getCards('h', card => card.hasGaintag('玲舞'));
+                        var maxDiscard = Math.min(lingwuCards.length, 10);
+
+                        if (lingwuCards.length) {
+                            if (ui.selected.cards.length >= maxDiscard) return 0;
+                            return lingwuCards.includes(card) ? 10 : 0;
                         }
-                        if(ui.selected.cards.length>1&&ui.selected.cards.length+2>=source.countCards('he')) return 0;
-                        if(player.hp<=2&&!target.hasSkillTag('filterDamage',null,{
-                            player:player,
-                            card:evt.getTrigger().card,
-                        })) return 10-get.value(card);
-                        return 5-get.value(card);
+                        return 10 - get.value(card);
                     });
                     'step 1'
                     var lose_list=[],cards=[];
@@ -580,6 +565,18 @@ if(!_status.extensionmade) _status.extensionmade=[];
                 filter(event, player) {
                     return event.player != player && event.player.isIn();
                 },
+                check(event, player) {
+                    if (get.attitude(player, event.player) < 0)
+                    {
+                        let num = 0;
+                        game.countPlayer2(current => {
+                        num += current.getHistory("useCard").filter(evt =>
+                            ["basic", "trick"].includes(get.type2(evt.card)) && evt.targets?.includes(player)
+                        ).length;});
+                        return num > 1;
+                    }
+                    return false;
+                },
                 direct: true,
                 async content(event, trigger, player) {
                     let target = trigger.player;
@@ -587,9 +584,14 @@ if(!_status.extensionmade) _status.extensionmade=[];
                         game.countPlayer2(current => {
                             num += current.getHistory("useCard").filter(evt => ["basic", "trick"].includes(get.type2(evt.card)) && evt.targets?.includes(player)).length;
                         });
-                    let res = await player.chooseToDiscard(1,false,'渐专', '<div class="text center">弃置一张手牌，令对方弃置'+num.toString()+'张牌').forResult();
+                    let res = await player.chooseToDiscard(1,false,'渐专', '<div class="text center">弃置一张手牌，令对方弃置'+num.toString()+'张牌').set('ai', card => {
+                        var lingwu = card.hasGaintag && card.hasGaintag('玲舞');
+                        if (lingwu) return 10 - get.value(card);   // 优先丢玲舞牌，挑价值最低
+                        return 5 - get.value(card);
+                    }).forResult();
                     if (res.bool){
-                         await target.chooseToDiscard(num, true, "he");                             }
+                         await target.chooseToDiscard(num, true, "he");
+                    }
                                            
                 },
                 "_priority": 0,
@@ -635,7 +637,8 @@ if(!_status.extensionmade) _status.extensionmade=[];
                         xianqi += player.storage.extra_xianqi;
                         player.storage.extra_xianqi=0;
                     }
-                    
+                    var weiya = false;
+
                     for(let i=0;i<xianqi;i++)
                     {
                         let list = [];
@@ -645,9 +648,41 @@ if(!_status.extensionmade) _status.extensionmade=[];
                         if (player.hasSkill("xiandi仙露") && player.storage.xianlu_limit) list.push("升级〖仙露〗");
                         if (player.hasSkill("xiandi仙姿") && player.storage.xianzi_sha && player.storage.xianzi_sha<3) list.push("升级〖仙姿〗");
                         if (player.hasSkill("xiandi仙罚")) list.push("升级〖仙罚〗");
+                        if(!weiya) list.push("释放威压");
                         list.push("摸一张牌");
                         if (list.length) {
-                            var result = await player.chooseControl(list).set("prompt", "仙帝：升级技能或摸牌。 剩余仙气："+(xianqi-i)).forResult();
+                            var result = await player.chooseControl(list).set("prompt", "仙帝：升级技能或摸牌。 剩余仙气："+(xianqi-i)).set("ai", () => {
+                                let player = _status.event.player;
+                                let living = game.countPlayer(cur => cur.isIn()); // 存活人数
+                                let choiceIndex = 0;
+
+                                if (player.countMark("xiandi仙法") < 1) choiceIndex = list.indexOf("升级〖仙法〗");
+                                //  存活人数大于4 → 优先升级〖仙体〗
+                                else if (living > 4 && list.includes("升级〖仙体〗")) {
+                                    choiceIndex = list.indexOf("升级〖仙体〗");
+                                }
+                                //  否则优先升级〖仙姿〗
+                                else if (list.includes("升级〖仙姿〗")) {
+                                    choiceIndex = list.indexOf("升级〖仙姿〗");
+                                }
+                                else {
+                                    if (living > player.storage.xiandi_xiancai.time) {
+                                        if (list.includes("升级〖仙裁〗")) {
+                                            choiceIndex = list.indexOf("升级〖仙裁〗");
+                                        }
+                                    }
+                                    else {
+                                        if (list.includes("升级〖仙露〗")) {
+                                            choiceIndex = list.indexOf("升级〖仙露〗");
+                                        }
+                                    }
+                                }
+                                if (choiceIndex < 0 && list.includes("摸一张牌")) {
+                                    choiceIndex = list.indexOf("摸一张牌");
+                                }
+
+                                return choiceIndex; 
+                            }).forResult();
                         }
                         let choice = result.control;
                         if (choice != "摸一张牌") {
@@ -673,7 +708,16 @@ if(!_status.extensionmade) _status.extensionmade=[];
                                 }
                                 if (remain.length)
                                 {
-                                    let tmp_result = await player.chooseControl(remain).set("prompt", "仙体：选择一种牌对你无效").forResult();
+                                    let tmp_result = await player.chooseControl(remain).set("prompt", "仙体：选择一种牌对你无效").set("ai",()=>{
+                                        let choiceIndex = 0;
+                                        if (remain.includes("普通杀")) {
+                                            choiceIndex = remain.indexOf("普通杀");
+                                        }
+                                        else if (remain.includes("普通锦囊")) {
+                                            choiceIndex = remain.indexOf("普通锦囊");
+                                        }
+                                        return choiceIndex;})
+                                    .forResult();
                                     switch (tmp_result.control){
                                         case "普通杀":
                                             player.storage.xianti_record.normalSha=true;
@@ -694,7 +738,17 @@ if(!_status.extensionmade) _status.extensionmade=[];
                                 if (player.storage.xianfa3[0]<10) tmp_list.push("距离+2");
                                 if (player.storage.xianfa3[1]<36) tmp_list.push("观看数量+6");
                                 if (player.countMark("xiandi仙法") < 1) tmp_list.push("可令受伤角色执行额外回合");
-                                let tmp_result = await player.chooseControl(tmp_list).set("prompt", "仙法：选择一项升级").forResult();
+                                let tmp_result = await player.chooseControl(tmp_list).set("prompt", "仙法：选择一项升级").set("ai",()=>{
+                                    let player = _status.event.player;
+                                    let choiceIndex = 0;
+                                    if (tmp_list.includes("可令受伤角色执行额外回合")) {
+                                        choiceIndex = tmp_list.indexOf("可令受伤角色执行额外回合");
+                                    }
+                                    else if (player.storage.xianfa3[0]<=2) {
+                                        choiceIndex = tmp_list.indexOf("距离+2");
+                                    }
+                                    return choiceIndex;
+                                }).forResult();
                                 switch (tmp_result && tmp_result.control){
                                         case "距离+2":
                                             player.storage.xianfa3[0]+=2;
@@ -711,7 +765,20 @@ if(!_status.extensionmade) _status.extensionmade=[];
                                 skill="xiandi仙露";
                                 let tmp_list = ["使用次数+1","基本牌数值+1","锦囊牌伤害+1"]
                                 if (player.countMark("xiandi仙露") < 1) tmp_list.push("可视为使用锦囊牌");
-                                let tmp_result = await player.chooseControl(tmp_list).set("prompt", "仙法：选择一项升级").forResult();
+                                let tmp_result = await player.chooseControl(tmp_list).set("prompt", "仙法：选择一项升级").set("ai",()=>{
+                                    let player = _status.event.player;
+                                    let choiceIndex = 0;
+                                    if (tmp_list.includes("可视为使用锦囊牌")) {
+                                        choiceIndex = tmp_list.indexOf("可视为使用锦囊牌");
+                                    }
+                                    else if (player.storage.xianlu_limit.time < 3) {
+                                        choiceIndex = tmp_list.indexOf("使用次数+1");
+                                    }
+                                    else {
+                                        choiceIndex = tmp_list.indexOf("基本牌数值+1");
+                                    }
+                                    return choiceIndex;
+                                }).forResult();
                                 switch (tmp_result.control){
                                         case "使用次数+1":
                                             player.storage.xianlu_limit.time+=1;
@@ -747,6 +814,10 @@ if(!_status.extensionmade) _status.extensionmade=[];
                                 }
                                 
                             }
+                            else if (choice == "释放威压") {
+                                await player.addTempSkills("xiandi仙帝_weiya");
+                                weiya = true;
+                            }
                             game.log(player, "升级了技能", "#g【" + get.translation(skill) + "】");
                         }
                         else await player.draw();
@@ -775,6 +846,32 @@ if(!_status.extensionmade) _status.extensionmade=[];
                         sourceSkill: "xiandi仙帝",
                         "_priority": 0,
                     },
+                    weiya: {
+                        sourceSkill: "xiandi仙帝",
+                        sub: true,
+                        trigger: { global: "dyingBegin" },
+                        filter(event, player) {
+                            if (event.player == player) {
+                                return false;
+                            }
+                            const phase = event.getParent("phase");
+                            return phase?.player == player && phase.name == "phase";
+                        },
+                        charlotte: true,
+                        forced: true,
+                        firstDo: true,
+                        mark: true,
+                        marktext: "威",
+                        intro: {
+                            content: "本回合其他角色跳过濒死状态",
+                        },
+                        logTarget: "player",
+                        async content(event, trigger, player) {
+                            trigger.player.chat("呃啊！仙帝之威压竟如此强大！");
+                            await trigger.player.die(trigger.reason);
+                        },
+                        "_priority": 0,
+				},
                 },
                 "_priority": 0,
             },
@@ -800,6 +897,28 @@ if(!_status.extensionmade) _status.extensionmade=[];
                     else await event.targets[0].loseHp(event.cards.length);
                     
                 },
+                check(card) {
+                    var val = get.value(card);
+                    let type = get.type(card); 
+                    let base;
+                    if (type == 'equip') base = 1;
+                    else if (type == 'trick') base = 1.5;
+                    else if (type == 'basic') base = 2;
+                    else base = 0;
+                    return base * 6 - val;
+                },
+                ai: {
+                        order: 2,
+                        result: {
+                            target(player, target) {
+                            if (get.attitude(player, target) < 0) return -3;
+                            return 0;
+                        },
+                        },
+                        tag: {
+                            damage: 3,
+                        },
+                },
                 "_priority": 0,
             },
             "xiandi仙体": {
@@ -823,6 +942,7 @@ if(!_status.extensionmade) _status.extensionmade=[];
                 },
                 selectTarget: 1,
                 selectCard: [1,Infinity],
+                prompt: "弃置任意张牌，令一名角色增加等量体力上限或回复等量体力",
                 position: "he",
                 async content(event, trigger, player){
                     let num = event.cards.length;
@@ -973,6 +1093,16 @@ if(!_status.extensionmade) _status.extensionmade=[];
                         if (to == 2) return moved[2].length < Math.floor(event.list[1]/2);
                         return true;
                     });
+                    next.set("processAI", function (list) {
+                        var cards = list[0][1].slice(0),
+                            player = _status.event.player,
+                            target = _status.event.getTrigger().player;
+                        var cards1 = cards.splice(0, Math.floor(cards.length/2));
+                        var card2;
+                        if (get.attitude(player, target) > 0) card2 = cards.splice(0, cards.length);
+                        else card2 = [];
+                        return [cards, card2, cards1];
+                    });
                     next.set("filterOk", function (moved) {
                         return moved[2].length <= Math.floor(event.list[1]/2);
                     });
@@ -993,10 +1123,14 @@ if(!_status.extensionmade) _status.extensionmade=[];
                         }).setContent("gaincardMultiple");
                     }
                     "step 2";
-                    if(player.countMark("xiandi仙法") >= 1) player.chooseBool("是否令受伤角色于此回合结束后执行一个额外回合？");
+                    if(player.countMark("xiandi仙法") >= 1) player.chooseBool("是否令受伤角色于此回合结束后执行一个额外回合？").set("ai",()=>{
+                        var player = _status.event.player,
+                        target = _status.event.getTrigger().player;
+                        return get.attitude(player, target) > 0;
+                    });
                     "step 3";
                     if(player.countMark("xiandi仙法") >= 1 && result.bool){
-                        game.log(trigger.player+"即将执行一个额外回合");
+                        game.log(get.translation(trigger.player)+"即将执行一个额外回合");
                         //trigger.player.markSkillCharacter("xiandi仙法", event.player, "仙法", "进行一个额外回合");
                         trigger.player.insertPhase();
                     }
@@ -1020,6 +1154,12 @@ if(!_status.extensionmade) _status.extensionmade=[];
                 enable: ["chooseToUse","chooseToRespond"],
                 usable(skill,player) {
                     return player.storage.xianlu_limit? player.storage.xianlu_limit.time : 1;
+                },
+                hiddenCard(player, name) {
+                    if (get.type(name) == "basic") return true;
+                    if (name == "wuxie" && player.countMark("xiandi仙露") >= 1) return true;
+                    if (get.type(name) == "trick" && player.countMark("xiandi仙露") >= 1) return true;
+                    return false;
                 },
                 chooseButton: {
                     dialog(event, player) {
@@ -1054,11 +1194,34 @@ if(!_status.extensionmade) _status.extensionmade=[];
                     check(button) {
                         var player = _status.event.player;
                         var card = { name: button.link[2], nature: button.link[3] };
-                        if (player.countCards("hes", cardx => cardx.name == card.name)) return 0;
-                        return _status.event.getParent().type == "phase" ? player.getUseValue(card) : 1;
+                        if (card.name == "sha" && player.storage.xianlu_limit.jiben >= player.storage.xianlu_limit.jinnang) return player.getUseValue(card)*10;
+                        return player.getUseValue(card);
                     },
                     prompt(links, player) {
                         return "视为使用" + get.translation(links[0][2]) ;
+                    },
+                },
+                ai: {
+                    order: 5, 
+                    result: {
+                        player : 1,
+                    },
+                    respondSha: true,
+                    respondShan: true,
+                    fireAttack: true,
+                    respondWuXie: true,
+                    wuxie: true,
+                    basic:{
+                        order:7,
+                        value:[4,2],
+                        useful:[4,2],
+                    },
+                    wuxie:function(target,card,player,current,state){
+                        if(get.attitude(current,player)>=0&&state>0) return false;
+                    },
+                    tag: {
+                        respond: 1,
+                        use: 1,
                     },
                 },
                 group: ["xiandi仙露_basic","xiandi仙露_trick","xiandi仙露_range"],
@@ -1162,7 +1325,13 @@ if(!_status.extensionmade) _status.extensionmade=[];
                             return _status.event.bool1;
                         }
                         return true;
-                    }).set("bool1", lib.skill["xiandi仙姿"].filterx(trigger, player)).forResult();//改的界吴懿的奔袭
+                    }).set("bool1", lib.skill["xiandi仙姿"].filterx(trigger, player)) .set("ai", function (button) {
+                        // AI 优先级：2 > 1 > 0
+                        if (button.link == 2) return 3;
+                        if (button.link == 1) return 2;
+                        if (button.link == 0) return 1;
+                        return 0;
+                    }).forResult();//改的界吴懿的奔袭
                     const chosen = (ask && ask.links) || [];
                     if (!chosen.length) return;
                     let extraTargets = [];
@@ -1180,7 +1349,7 @@ if(!_status.extensionmade) _status.extensionmade=[];
                             })
                             .set("targets", trigger.targets.slice()) // 原目标列表
                             .set("card", trigger.card)
-                            .set("ai", t => get.effect(t, _status.event.card, _status.event.player, _status.event.player))
+                            .set("ai", target => -get.attitude(player, target))
                             .forResult();
 
                             if (pick && pick.targets && pick.targets.length) extraTargets = extraTargets.concat(pick.targets);
@@ -1239,9 +1408,10 @@ if(!_status.extensionmade) _status.extensionmade=[];
                         async content(event,trigger,player) {
                             
                             // const next = game.createEvent("invoke_xiancai");
-                            // next.player = player;
-                            let pick = await player.chooseTarget("请选择〖仙裁〗的目标", 1, function (player, target) { return target !== player; }).forResult();
-                            // next.setContent(lib.skill["xiandi仙裁"].content);
+                            const myself = player;
+                            let pick = await player.chooseTarget("请选择〖仙裁〗的目标", function (card, player, target) { return target != player;})
+                            .set("ai", target => -get.attitude(myself, target)).forResult();
+                            game.log(pick.targets);
                             if( !pick || !pick.targets || !pick.targets.length) return;
                             await player.useSkill("xiandi仙裁", pick.targets);
                         },
@@ -1320,6 +1490,23 @@ if(!_status.extensionmade) _status.extensionmade=[];
                 },
                 filterTarget(card, player, target) {
                     return target !== player;
+                },
+                check(event, player) {
+                    if (get.attitude(player, event.player) < 0) return true;
+                    return false;
+                },
+                ai: {
+                    order: 10,
+                    result: {
+                        target: function (player, target) {
+                            if (get.attitude(player, target) < 0){
+                                if (target.countCards('h') > 0) return -6;
+                                if (target.countCards('e') > 0) return -5;
+                                return -4;
+                            } 
+                            return 0;
+                        },
+                    },
                 },
                 async content(event, trigger, player) {
                     const target = event.targets[0];
@@ -1435,12 +1622,12 @@ if(!_status.extensionmade) _status.extensionmade=[];
                         mod: {
                             cardEnabled2(card, player) { // 使用
                             const name = (get.name ? get.name(card, player, "raw") : card.name);
-                            const ban = player.storage.xiandi_xiancai_banname || [];
+                            const ban = player.storage["xiandi仙裁_banname"] || [];
                             if (ban.includes(name)) return false;
                             },
                             cardRespondable(card, player) { // 打出
                             const name = (get.name ? get.name(card, player, "raw") : card.name);
-                            const ban = player.storage.xiandi_xiancai_banname || [];
+                            const ban = player.storage["xiandi仙裁_banname"] || [];
                             if (ban.includes(name)) return false;
                             },
                         },
@@ -1470,7 +1657,7 @@ if(!_status.extensionmade) _status.extensionmade=[];
                         mod: {
                             globalFrom(from, to, distance) {
                             if (!from || !to) return;
-                            const map = from.storage.xiandi_xiancai_farplus;
+                            const map = from.storage["xiandi仙裁_farplus"];
                             if (!map) return;
                             const key = to.playerid || to.playerid2 || to.seat;
                             const add = map[key] || 0;
@@ -1490,8 +1677,8 @@ if(!_status.extensionmade) _status.extensionmade=[];
                     global: "phaseBegin",
                     player: "damageEnd",
                 },
+                persevereSkill: true,
                 forced: true,
-                juexingji: true,
                 skillAnimation: true,
                 animationColor: "gray",
                 filter: function(event,player){
@@ -1499,7 +1686,7 @@ if(!_status.extensionmade) _status.extensionmade=[];
                 },
                 content: function(){
                     'step 0'
-                    player.awakenSkill('仙帅');
+                    //player.awakenSkill('仙帅');
                     player.gainMaxHp(4);
                     'step 1'
                     if(player.maxHp>player.hp) player.recover(player.maxHp-player.hp);
@@ -1737,7 +1924,7 @@ if(!_status.extensionmade) _status.extensionmade=[];
             "渐专": "渐专",
             "渐专_info": "其他角色使用基本牌或普通锦囊牌指定你为目标后，你可以弃置一张牌令其弃置X张牌（X为其本回合使用基本盘和普通锦囊牌指定你的次数）",
             "xiandi仙帝": "仙帝",
-            "xiandi仙帝_info": "持恒技。游戏开始时，你获得〖仙裁〗〖仙体〗〖仙法〗〖仙露〗〖仙姿〗〖仙罚〗；准备阶段，你随机获得1-5点仙气，然后消耗所有仙气来升级这些技能或者摸牌。",
+            "xiandi仙帝_info": "持恒技。游戏开始时，你获得〖仙裁〗〖仙体〗〖仙法〗〖仙露〗〖仙姿〗〖仙罚〗；准备阶段，你随机获得1-5点仙气，然后消耗所有仙气来升级这些技能或摸牌或释放威压（本回合其他角色跳过濒死结算）。",
             "xiandi仙体": "仙体",
             "xiandi仙体_info": "持恒技。你无法被翻面；你无法被跳过任何阶段；你的手牌上限始终等于体力上限；你降受到的大于1点的伤害降至1点；摸牌阶段，你可以额外摸体力上限张牌；延时锦囊（升级：普通杀/属性杀/普通锦囊）对你无效，当你成为其他角色使用的这些牌的目标后，你获得1点仙气；出牌阶段限1次， 你可以弃置任意张牌并失去等量体力，令一名角色增加等量体力上限或回复等量体力。",
             "xiandi仙罚": "仙罚",
@@ -1759,7 +1946,7 @@ if(!_status.extensionmade) _status.extensionmade=[];
             "骰酒": "骰酒",
             "骰酒_info": "游戏开始时，你选择并记录一个花色和一个点数。当你使用【酒】后，你进行判定并比较判定结果与你记录的花色和点数：若它们颜色相同你摸一张牌；若它们花色相同你增加1点体力上限并恢复1点体力；若它们点数相同你进行判定并摸判定结果点数张牌。若你使用的是非转化的【酒】，则改为执行“宽松判定”：在上述比较时，颜色视为相同，原花色相同的条件改为颜色相同，原点数相同的条件改为花色或点数相同。",
             "酒仙": "酒仙",
-            "酒仙_info": "限定技。出牌阶段，你可以令你的〖掷酒〗均执行“宽松判定”，然后本阶段内当年造成伤害后你结束此阶段。",
+            "酒仙_info": "限定技。出牌阶段，你可以令你的〖掷酒〗均执行“宽松判定”，然后本阶段你下次造成伤害后你结束此阶段。",
         },
     },
     intro: "一百年后的三国杀，仙界武将层出不穷，仙界大乱斗也随之而来。",
